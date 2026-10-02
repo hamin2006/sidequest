@@ -7,11 +7,7 @@ use sidequest::store::Store;
 use sidequest::{claude, frontend, games, hooks, paths};
 
 #[derive(Parser)]
-#[command(
-    name = "sidequest",
-    version,
-    about = "Games to play while Claude Code works"
-)]
+#[command(name = "sidequest", version, about = "Games to play while Claude Code works")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Cmd>,
@@ -95,10 +91,7 @@ fn run(cmd: Option<Cmd>) -> anyhow::Result<()> {
     if let Some(w) = warning {
         eprintln!("warning: {w}");
     }
-    match cmd.unwrap_or(Cmd::Window {
-        auto: false,
-        game: None,
-    }) {
+    match cmd.unwrap_or(Cmd::Window { auto: false, game: None }) {
         Cmd::Window { auto, game } => {
             check_game(&game)?;
             if hooks::window_running() {
@@ -107,11 +100,7 @@ fn run(cmd: Option<Cmd>) -> anyhow::Result<()> {
                 }
                 return Ok(());
             }
-            let mode = if auto && cfg.auto_close {
-                Mode::Auto
-            } else {
-                Mode::Manual
-            };
+            let mode = if auto && cfg.auto_close { Mode::Auto } else { Mode::Manual };
             frontend::window::run(Arcade::new(store(), mode, game.as_deref()), &cfg)
         }
         Cmd::Play { game } => {
@@ -128,14 +117,8 @@ fn run(cmd: Option<Cmd>) -> anyhow::Result<()> {
                 "install" => {
                     let exe = std::env::current_exe()?.canonicalize()?;
                     hooks::install(&settings, &exe)?;
-                    println!(
-                        "Installed hooks in {} (backup: settings.json.sidequest-backup).",
-                        settings.display()
-                    );
-                    println!(
-                        "The game window will pop up when Claude works for more than {}s.",
-                        cfg.delay_secs
-                    );
+                    println!("Installed hooks in {} (backup: settings.json.sidequest-backup).", settings.display());
+                    println!("The game window will pop up when Claude works for more than {}s.", cfg.delay_secs);
                 }
                 "uninstall" => {
                     if hooks::uninstall(&settings)? {
@@ -144,14 +127,7 @@ fn run(cmd: Option<Cmd>) -> anyhow::Result<()> {
                         println!("No sidequest hooks found.");
                     }
                 }
-                _ => println!(
-                    "{}",
-                    if hooks::is_installed(&settings) {
-                        "installed"
-                    } else {
-                        "not installed"
-                    }
-                ),
+                _ => println!("{}", if hooks::is_installed(&settings) { "installed" } else { "not installed" }),
             }
             Ok(())
         }
@@ -167,33 +143,14 @@ fn run(cmd: Option<Cmd>) -> anyhow::Result<()> {
             let w = claude::Watcher::new(claude::events_path(), claude::now_ms());
             println!(
                 "hooks:   {}",
-                if installed {
-                    "installed"
-                } else {
-                    "not installed (run `sidequest hooks install`)"
-                }
+                if installed { "installed" } else { "not installed (run `sidequest hooks install`)" }
             );
-            println!(
-                "pop-up:  {} after {}s",
-                if cfg.enabled { "on" } else { "off" },
-                cfg.delay_secs
-            );
+            println!("pop-up:  {} after {}s", if cfg.enabled { "on" } else { "off" }, cfg.delay_secs);
             println!(
                 "claude:  {}",
-                if w.busy() > 0 {
-                    format!("{} session(s) working", w.busy())
-                } else {
-                    "idle".into()
-                }
+                if w.busy() > 0 { format!("{} session(s) working", w.busy()) } else { "idle".into() }
             );
-            println!(
-                "window:  {}",
-                if hooks::window_running() {
-                    "open"
-                } else {
-                    "closed"
-                }
-            );
+            println!("window:  {}", if hooks::window_running() { "open" } else { "closed" });
             Ok(())
         }
         Cmd::Config { init } => {

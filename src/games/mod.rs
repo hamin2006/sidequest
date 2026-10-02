@@ -41,9 +41,7 @@ pub struct GameInfo {
 }
 
 fn load_as<T: Game + serde::de::DeserializeOwned + 'static>(v: &Value) -> Option<Box<dyn Game>> {
-    serde_json::from_value::<T>(v.clone())
-        .ok()
-        .map(|g| Box::new(g) as Box<dyn Game>)
+    serde_json::from_value::<T>(v.clone()).ok().map(|g| Box::new(g) as Box<dyn Game>)
 }
 
 pub static CATALOG: &[GameInfo] = &[

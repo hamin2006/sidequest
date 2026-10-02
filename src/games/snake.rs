@@ -60,10 +60,8 @@ impl Snake {
     }
 
     fn place_food(&mut self) {
-        let free: Vec<(i32, i32)> = (0..H)
-            .flat_map(|y| (0..W).map(move |x| (x, y)))
-            .filter(|c| !self.body.contains(c))
-            .collect();
+        let free: Vec<(i32, i32)> =
+            (0..H).flat_map(|y| (0..W).map(move |x| (x, y))).filter(|c| !self.body.contains(c)).collect();
         if let Some(&c) = free.get(self.rng.below(free.len())) {
             self.food = c;
         }
@@ -87,11 +85,7 @@ impl Snake {
         let eating = next == self.food;
         // The tail moves out of the way this step unless we're growing.
         let tail_free = if eating { 0 } else { 1 };
-        let hits_self = self
-            .body
-            .iter()
-            .take(self.body.len() - tail_free)
-            .any(|c| *c == next);
+        let hits_self = self.body.iter().take(self.body.len() - tail_free).any(|c| *c == next);
         if next.0 < 0 || next.1 < 0 || next.0 >= W || next.1 >= H || hits_self {
             self.over = true;
             return;
@@ -141,36 +135,20 @@ impl Game for Snake {
         let r = ui::centered(area, bw, bh + 2);
         let head = Line::from(vec![
             Span::styled(format!(" Score {} ", self.score), Style::new().fg(ui::GOOD)),
-            Span::styled(
-                format!(" length {}  speed {:.0}", self.body.len(), self.speed),
-                Style::new().fg(ui::DIM),
-            ),
+            Span::styled(format!(" length {}  speed {:.0}", self.body.len(), self.speed), Style::new().fg(ui::DIM)),
         ]);
         f.render_widget(Paragraph::new(head), Rect { height: 1, ..r });
-        let board = Rect {
-            y: r.y + 1,
-            height: bh,
-            ..r
-        };
+        let board = Rect { y: r.y + 1, height: bh, ..r };
         f.render_widget(ui::panel("Snake", ui::FAINT).style(Style::new()), board);
         let buf = f.buffer_mut();
         let n = self.body.len().max(1) as f32;
         for (i, &(x, y)) in self.body.iter().enumerate() {
             let t = i as f32 / n;
             let g = (230.0 - 120.0 * t) as u8;
-            let color = if i == 0 {
-                Color::Rgb(170, 255, 170)
-            } else {
-                Color::Rgb(60, g, 90)
-            };
+            let color = if i == 0 { Color::Rgb(170, 255, 170) } else { Color::Rgb(60, g, 90) };
             let cx = board.x + 1 + x as u16 * 2;
             let cy = board.y + 1 + y as u16;
-            buf.set_string(
-                cx,
-                cy,
-                if i == 0 { "██" } else { "▓▓" },
-                Style::new().fg(color),
-            );
+            buf.set_string(cx, cy, if i == 0 { "██" } else { "▓▓" }, Style::new().fg(color));
         }
         let (fx, fy) = self.food;
         buf.set_string(
@@ -181,11 +159,7 @@ impl Game for Snake {
         );
         f.render_widget(
             Paragraph::new("arrows/WASD steer · esc pause").style(Style::new().fg(ui::FAINT)),
-            Rect {
-                y: board.y + bh,
-                height: 1,
-                ..r
-            },
+            Rect { y: board.y + bh, height: 1, ..r },
         );
         if self.over {
             ui::modal(
@@ -245,9 +219,7 @@ mod tests {
         assert!(s.over, "ran into the right wall");
 
         let mut s = snake();
-        s.body = [(5, 5), (6, 5), (6, 6), (5, 6), (4, 6)]
-            .into_iter()
-            .collect();
+        s.body = [(5, 5), (6, 5), (6, 6), (5, 6), (4, 6)].into_iter().collect();
         s.dir = (0, 1);
         s.step();
         assert!(s.over, "bit itself");

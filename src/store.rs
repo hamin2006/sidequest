@@ -20,17 +20,11 @@ pub struct Score {
 
 impl Score {
     pub fn higher(value: u64) -> Self {
-        Self {
-            value,
-            better: Better::Higher,
-        }
+        Self { value, better: Better::Higher }
     }
 
     pub fn lower(value: u64) -> Self {
-        Self {
-            value,
-            better: Better::Lower,
-        }
+        Self { value, better: Better::Lower }
     }
 
     pub fn beats(&self, other: &Score) -> bool {

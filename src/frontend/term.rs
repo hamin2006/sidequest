@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use ratatui::crossterm::event::{
-    self, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
-    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::{execute, terminal};
 
@@ -37,8 +37,7 @@ pub fn run(mut arcade: Arcade) -> Result<()> {
         && execute!(
             std::io::stdout(),
             PushKeyboardEnhancementFlags(
-                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
             )
         )
         .is_ok();
@@ -50,10 +49,7 @@ pub fn run(mut arcade: Arcade) -> Result<()> {
         let frame = Duration::from_millis(16);
         loop {
             let start = Instant::now();
-            let mut input = Input {
-                held_reliable: enhanced,
-                ..Input::default()
-            };
+            let mut input = Input { held_reliable: enhanced, ..Input::default() };
             while let Some(left) = frame.checked_sub(start.elapsed()) {
                 if !event::poll(left)? {
                     break;

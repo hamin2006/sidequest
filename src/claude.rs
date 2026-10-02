@@ -55,10 +55,7 @@ pub struct Event {
 }
 
 pub fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 pub fn events_path() -> PathBuf {
@@ -66,22 +63,12 @@ pub fn events_path() -> PathBuf {
 }
 
 fn clean(s: &str) -> String {
-    let s: String = s
-        .chars()
-        .filter(|c| !c.is_control() && *c != '\t')
-        .take(128)
-        .collect();
+    let s: String = s.chars().filter(|c| !c.is_control() && *c != '\t').take(128).collect();
     if s.is_empty() { "-".into() } else { s }
 }
 
 pub fn format_event(e: &Event) -> String {
-    format!(
-        "{}\t{}\t{}\t{}\n",
-        e.ms,
-        e.kind.as_str(),
-        clean(&e.session),
-        clean(&e.term)
-    )
+    format!("{}\t{}\t{}\t{}\n", e.ms, e.kind.as_str(), clean(&e.session), clean(&e.term))
 }
 
 pub fn parse_event(line: &str) -> Option<Event> {
@@ -90,12 +77,7 @@ pub fn parse_event(line: &str) -> Option<Event> {
     let kind = Kind::parse(p.next()?)?;
     let session = p.next()?.to_string();
     let term = p.next().unwrap_or("-").to_string();
-    Some(Event {
-        ms,
-        kind,
-        session,
-        term,
-    })
+    Some(Event { ms, kind, session, term })
 }
 
 const MAX_LOG: u64 = 256 * 1024;
@@ -117,11 +99,7 @@ pub fn append(path: &Path, e: &Event) -> std::io::Result<()> {
 }
 
 pub fn read_all(path: &Path) -> Vec<Event> {
-    fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
-        .filter_map(parse_event)
-        .collect()
+    fs::read_to_string(path).unwrap_or_default().lines().filter_map(parse_event).collect()
 }
 
 /// A session counts as busy only for a while after its last start, in case Claude was killed before
@@ -130,13 +108,8 @@ const STALE_MS: u64 = 2 * 60 * 60 * 1000;
 
 /// Should the delayed pop-up for (`session`, `start_ms`) still open the window?
 pub fn should_pop(events: &[Event], session: &str, start_ms: u64) -> bool {
-    let latest = events
-        .iter()
-        .filter(|e| e.session == session && e.kind != Kind::Dismiss)
-        .max_by_key(|e| e.ms);
-    let dismissed = events
-        .iter()
-        .any(|e| e.kind == Kind::Dismiss && e.ms >= start_ms);
+    let latest = events.iter().filter(|e| e.session == session && e.kind != Kind::Dismiss).max_by_key(|e| e.ms);
+    let dismissed = events.iter().any(|e| e.kind == Kind::Dismiss && e.ms >= start_ms);
     matches!(latest, Some(e) if e.kind == Kind::Start && e.ms == start_ms) && !dismissed
 }
 
@@ -158,13 +131,7 @@ pub struct Watcher {
 impl Watcher {
     /// Only events after `since_ms` produce signals; earlier history just sets the busy state.
     pub fn new(path: PathBuf, since_ms: u64) -> Self {
-        let mut w = Self {
-            path,
-            offset: 0,
-            since_ms,
-            busy: HashMap::new(),
-            last_term: None,
-        };
+        let mut w = Self { path, offset: 0, since_ms, busy: HashMap::new(), last_term: None };
         w.poll();
         w
     }
@@ -215,10 +182,7 @@ impl Watcher {
 
     pub fn busy(&self) -> usize {
         let now = now_ms();
-        self.busy
-            .values()
-            .filter(|&&ms| now.saturating_sub(ms) < STALE_MS)
-            .count()
+        self.busy.values().filter(|&&ms| now.saturating_sub(ms) < STALE_MS).count()
     }
 
     pub fn busy_sessions(&self) -> Vec<String> {
@@ -264,27 +228,14 @@ mod tests {
     use super::*;
 
     fn ev(ms: u64, kind: Kind, s: &str) -> Event {
-        Event {
-            ms,
-            kind,
-            session: s.into(),
-            term: "ghostty".into(),
-        }
+        Event { ms, kind, session: s.into(), term: "ghostty".into() }
     }
 
     #[test]
     fn lines_round_trip_and_bad_lines_are_skipped() {
-        let e = Event {
-            ms: 5,
-            kind: Kind::Notify,
-            session: "a\tb\nc".into(),
-            term: "".into(),
-        };
+        let e = Event { ms: 5, kind: Kind::Notify, session: "a\tb\nc".into(), term: "".into() };
         let back = parse_event(&format_event(&e)).unwrap();
-        assert_eq!(
-            back.session, "abc",
-            "tabs and newlines can't break the format"
-        );
+        assert_eq!(back.session, "abc", "tabs and newlines can't break the format");
         assert_eq!(back.term, "-");
         assert!(parse_event("garbage").is_none());
         assert!(parse_event("12\tbogus\ts\tt").is_none());
@@ -319,25 +270,10 @@ mod tests {
         assert!(w.poll().is_empty());
         assert_eq!(w.busy(), 2);
         // A half-written line is left for the next poll.
-        fs::OpenOptions::new()
-            .append(true)
-            .open(&p)
-            .unwrap()
-            .write_all(format!("{now}\tstop\ta").as_bytes())
-            .unwrap();
+        fs::OpenOptions::new().append(true).open(&p).unwrap().write_all(format!("{now}\tstop\ta").as_bytes()).unwrap();
         assert!(w.poll().is_empty());
-        fs::OpenOptions::new()
-            .append(true)
-            .open(&p)
-            .unwrap()
-            .write_all(b"\tghostty\n")
-            .unwrap();
-        assert_eq!(
-            w.poll(),
-            vec![Signal::Done {
-                term: "ghostty".into()
-            }]
-        );
+        fs::OpenOptions::new().append(true).open(&p).unwrap().write_all(b"\tghostty\n").unwrap();
+        assert_eq!(w.poll(), vec![Signal::Done { term: "ghostty".into() }]);
         assert_eq!(w.busy(), 1);
         assert_eq!(w.last_term.as_deref(), Some("ghostty"));
     }
@@ -348,18 +284,12 @@ mod tests {
         let p = d.path().join("events.log");
         let mut w = Watcher::new(p.clone(), 0);
         for i in 0..6000 {
-            append(
-                &p,
-                &ev(i, if i % 2 == 0 { Kind::Start } else { Kind::Stop }, "s"),
-            )
-            .unwrap();
+            append(&p, &ev(i, if i % 2 == 0 { Kind::Start } else { Kind::Stop }, "s")).unwrap();
         }
         assert!(fs::metadata(&p).unwrap().len() <= MAX_LOG + 200);
         w.poll();
         append(&p, &ev(99_999, Kind::Stop, "s")).unwrap();
-        assert!(w.poll().contains(&Signal::Done {
-            term: "ghostty".into()
-        }));
+        assert!(w.poll().contains(&Signal::Done { term: "ghostty".into() }));
     }
 
     #[test]

@@ -112,9 +112,7 @@ impl Invaders {
         self.shot = None;
         self.bombs.clear();
         self.shields = (0..4)
-            .flat_map(|b| {
-                (0..2).flat_map(move |dy| (0..6).map(move |dx| (8 + b * 13 + dx, H - 5 + dy, 3u8)))
-            })
+            .flat_map(|b| (0..2).flat_map(move |dy| (0..6).map(move |dx| (8 + b * 13 + dx, H - 5 + dy, 3u8))))
             .collect();
     }
 
@@ -153,27 +151,16 @@ impl Invaders {
         // The lowest alien of a random non-empty column fires.
         let shooters: Vec<(i32, i32)> = (0..COLS)
             .filter_map(|c| {
-                self.aliens
-                    .iter()
-                    .filter(|a| a.alive && a.col == c)
-                    .max_by_key(|a| a.y)
-                    .map(|a| (a.x, a.y))
+                self.aliens.iter().filter(|a| a.alive && a.col == c).max_by_key(|a| a.y).map(|a| (a.x, a.y))
             })
             .collect();
         if let Some(&(x, y)) = shooters.get(self.rng.below(shooters.len())) {
-            self.bombs.push(Shot {
-                x: x + 1,
-                y: y as f64 + 1.0,
-            });
+            self.bombs.push(Shot { x: x + 1, y: y as f64 + 1.0 });
         }
     }
 
     fn hit_shield(&mut self, x: i32, y: i32) -> bool {
-        if let Some(s) = self
-            .shields
-            .iter_mut()
-            .find(|s| s.0 == x && s.1 == y && s.2 > 0)
-        {
+        if let Some(s) = self.shields.iter_mut().find(|s| s.0 == x && s.1 == y && s.2 > 0) {
             s.2 -= 1;
             return true;
         }
@@ -196,10 +183,7 @@ impl Invaders {
         }
         self.player_x = self.player_x.clamp(2.0, W as f64 - 3.0);
         if fire && self.shot.is_none() {
-            self.shot = Some(Shot {
-                x: self.player_x.round() as i32,
-                y: (H - 2) as f64,
-            });
+            self.shot = Some(Shot { x: self.player_x.round() as i32, y: (H - 2) as f64 });
         }
 
         self.step_timer += dt;
@@ -222,11 +206,7 @@ impl Invaders {
                     alive = false;
                     break;
                 }
-                if let Some(a) = self
-                    .aliens
-                    .iter_mut()
-                    .find(|a| a.alive && a.y == y && s.x >= a.x && s.x < a.x + 3)
-                {
+                if let Some(a) = self.aliens.iter_mut().find(|a| a.alive && a.y == y && s.x >= a.x && s.x < a.x + 3) {
                     a.alive = false;
                     self.score += POINTS[a.kind];
                     self.flashes.push((a.x, a.y, 0.25));
@@ -283,11 +263,7 @@ impl Invaders {
         self.ufo_timer -= dt;
         if self.ufo.is_none() && self.ufo_timer <= 0.0 {
             self.ufo_timer = 20.0 + self.rng.f64() * 15.0;
-            self.ufo = Some(if self.rng.chance(0.5) {
-                (0.0, 12.0)
-            } else {
-                (W as f64 - 5.0, -12.0)
-            });
+            self.ufo = Some(if self.rng.chance(0.5) { (0.0, 12.0) } else { (W as f64 - 5.0, -12.0) });
         }
         if let Some((x, v)) = self.ufo {
             let nx = x + v * dt;
@@ -318,10 +294,7 @@ impl Game for Invaders {
             || input.is_held(Key::Char('d'))
             || input.was(Key::Right)
             || input.was(Key::Char('d'));
-        let fire = input.was(Key::Space)
-            || input.is_held(Key::Space)
-            || input.was(Key::Up)
-            || input.char_pressed('w');
+        let fire = input.was(Key::Space) || input.is_held(Key::Space) || input.was(Key::Up) || input.char_pressed('w');
         self.tick(dt, left, right, fire);
     }
 
@@ -335,22 +308,12 @@ impl Game for Invaders {
             Paragraph::new(Line::from(vec![
                 Span::styled(format!(" Score {}", self.score), Style::new().fg(ui::GOOD)),
                 Span::styled(format!("   Wave {}", self.wave), Style::new().fg(ui::DIM)),
-                Span::styled(
-                    format!("   {}", "▲ ".repeat(self.lives as usize)),
-                    Style::new().fg(ui::ACCENT),
-                ),
+                Span::styled(format!("   {}", "▲ ".repeat(self.lives as usize)), Style::new().fg(ui::ACCENT)),
             ])),
             Rect { height: 1, ..r },
         );
-        let field = Rect {
-            y: r.y + 1,
-            height: H as u16 + 2,
-            ..r
-        };
-        f.render_widget(
-            ui::panel("Space Invaders", ui::FAINT).style(Style::new().bg(Color::Rgb(8, 9, 16))),
-            field,
-        );
+        let field = Rect { y: r.y + 1, height: H as u16 + 2, ..r };
+        f.render_widget(ui::panel("Space Invaders", ui::FAINT).style(Style::new().bg(Color::Rgb(8, 9, 16))), field);
         let (ox, oy) = (field.x + 1, field.y + 1);
         let buf = f.buffer_mut();
         let put = |buf: &mut ratatui::buffer::Buffer, x: i32, y: i32, s: &str, st: Style| {
@@ -366,48 +329,22 @@ impl Game for Invaders {
                 put(buf, x, y, g, Style::new().fg(Color::Rgb(90, 200, 120)));
             }
         }
-        let colors = [
-            Color::Rgb(230, 120, 255),
-            Color::Rgb(110, 210, 255),
-            Color::Rgb(140, 240, 140),
-        ];
+        let colors = [Color::Rgb(230, 120, 255), Color::Rgb(110, 210, 255), Color::Rgb(140, 240, 140)];
         for a in self.aliens.iter().filter(|a| a.alive) {
-            put(
-                buf,
-                a.x,
-                a.y,
-                SPRITE[a.kind][self.frame],
-                Style::new().fg(colors[a.kind]),
-            );
+            put(buf, a.x, a.y, SPRITE[a.kind][self.frame], Style::new().fg(colors[a.kind]));
         }
         if let Some((x, _)) = self.ufo {
-            put(
-                buf,
-                x as i32,
-                1,
-                "<=O=>",
-                Style::new().fg(Color::Rgb(255, 90, 90)),
-            );
+            put(buf, x as i32, 1, "<=O=>", Style::new().fg(Color::Rgb(255, 90, 90)));
         }
         if let Some(s) = &self.shot {
-            put(
-                buf,
-                s.x,
-                s.y as i32,
-                "|",
-                Style::new().fg(Color::Rgb(255, 240, 140)),
-            );
+            put(buf, s.x, s.y as i32, "|", Style::new().fg(Color::Rgb(255, 240, 140)));
         }
         for b in &self.bombs {
             put(
                 buf,
                 b.x,
                 b.y as i32,
-                if (b.y * 4.0) as i32 % 2 == 0 {
-                    "!"
-                } else {
-                    "¡"
-                },
+                if (b.y * 4.0) as i32 % 2 == 0 { "!" } else { "¡" },
                 Style::new().fg(Color::Rgb(255, 120, 90)),
             );
         }
@@ -416,21 +353,11 @@ impl Game for Invaders {
         }
         let blink = self.invuln > 0.0 && (self.invuln * 8.0) as i32 % 2 == 0;
         if !blink {
-            put(
-                buf,
-                self.player_x.round() as i32 - 1,
-                H - 1,
-                "/▲\\",
-                Style::new().fg(Color::Rgb(140, 200, 255)),
-            );
+            put(buf, self.player_x.round() as i32 - 1, H - 1, "/▲\\", Style::new().fg(Color::Rgb(140, 200, 255)));
         }
         f.render_widget(
             Paragraph::new("←/→ move · space fire · esc pause").style(Style::new().fg(ui::FAINT)),
-            Rect {
-                y: field.y + field.height,
-                height: 1,
-                ..r
-            },
+            Rect { y: field.y + field.height, height: 1, ..r },
         );
         if self.over {
             ui::modal(
@@ -471,13 +398,7 @@ mod tests {
     fn shooting_an_alien_scores() {
         let mut g = game();
         g.bomb_timer = 99.0;
-        let target = g
-            .aliens
-            .iter()
-            .filter(|a| a.kind == 2)
-            .max_by_key(|a| a.y)
-            .unwrap()
-            .clone();
+        let target = g.aliens.iter().filter(|a| a.kind == 2).max_by_key(|a| a.y).unwrap().clone();
         g.player_x = (target.x + 1) as f64;
         // Clear the shield in the way.
         g.shields.retain(|s| s.0 != target.x + 1);
@@ -509,10 +430,7 @@ mod tests {
         g.shields.clear();
         for _ in 0..3 {
             g.invuln = 0.0;
-            g.bombs.push(Shot {
-                x: g.player_x.round() as i32,
-                y: (H - 2) as f64,
-            });
+            g.bombs.push(Shot { x: g.player_x.round() as i32, y: (H - 2) as f64 });
             g.tick(0.1, false, false, false);
         }
         assert_eq!(g.lives, 0);

@@ -82,14 +82,9 @@ mod tests {
 
     #[test]
     fn directions() {
-        let mut i = Input {
-            pressed: vec![Key::Up, Key::Char('d')],
-            ..Input::default()
-        };
+        let mut i = Input { pressed: vec![Key::Up, Key::Char('d')], ..Input::default() };
         assert_eq!(i.dir_pressed(), Some((1, 0)));
-        i.held = [Key::Left, Key::Char('w'), Key::Char('a')]
-            .into_iter()
-            .collect();
+        i.held = [Key::Left, Key::Char('w'), Key::Char('a')].into_iter().collect();
         assert_eq!(i.dir_held(), (-1, -1));
         i.held = [Key::Left, Key::Right].into_iter().collect();
         assert_eq!(i.dir_held(), (0, 0));

@@ -67,19 +67,15 @@ impl Mines {
     }
 
     fn neighbours(x: usize, y: usize) -> impl Iterator<Item = (usize, usize)> {
-        (-1i32..=1)
-            .flat_map(move |dy| (-1i32..=1).map(move |dx| (dx, dy)))
-            .filter_map(move |(dx, dy)| {
-                let (nx, ny) = (x as i32 + dx, y as i32 + dy);
-                ((dx, dy) != (0, 0) && nx >= 0 && ny >= 0 && (nx as usize) < W && (ny as usize) < H)
-                    .then_some((nx as usize, ny as usize))
-            })
+        (-1i32..=1).flat_map(move |dy| (-1i32..=1).map(move |dx| (dx, dy))).filter_map(move |(dx, dy)| {
+            let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+            ((dx, dy) != (0, 0) && nx >= 0 && ny >= 0 && (nx as usize) < W && (ny as usize) < H)
+                .then_some((nx as usize, ny as usize))
+        })
     }
 
     pub fn count(&self, x: usize, y: usize) -> usize {
-        Self::neighbours(x, y)
-            .filter(|&(nx, ny)| self.mine[Self::idx(nx, ny)])
-            .count()
+        Self::neighbours(x, y).filter(|&(nx, ny)| self.mine[Self::idx(nx, ny)]).count()
     }
 
     /// Mines are placed on the first reveal, never in the 3×3 around it.
@@ -137,9 +133,7 @@ impl Mines {
 
     /// On an opened number with that many flags around it, open the other neighbours.
     fn chord(&mut self, x: usize, y: usize) {
-        let flags = Self::neighbours(x, y)
-            .filter(|&(nx, ny)| self.flag[Self::idx(nx, ny)])
-            .count();
+        let flags = Self::neighbours(x, y).filter(|&(nx, ny)| self.flag[Self::idx(nx, ny)]).count();
         if flags != self.count(x, y) {
             return;
         }
@@ -159,9 +153,7 @@ impl Mines {
     }
 
     fn check_win(&mut self) {
-        let closed_safe = (0..W * H)
-            .filter(|&i| !self.open[i] && !self.mine[i])
-            .count();
+        let closed_safe = (0..W * H).filter(|&i| !self.open[i] && !self.mine[i]).count();
         if closed_safe == 0 && self.state == State::Playing {
             self.state = State::Won;
         }
@@ -205,22 +197,12 @@ impl Game for Mines {
         let r = ui::centered(area, w, h);
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(
-                    format!(" ⚑ {}", self.flags_left()),
-                    Style::new().fg(ui::WARN),
-                ),
-                Span::styled(
-                    format!("   ⏱ {:.0}s", self.elapsed),
-                    Style::new().fg(ui::DIM),
-                ),
+                Span::styled(format!(" ⚑ {}", self.flags_left()), Style::new().fg(ui::WARN)),
+                Span::styled(format!("   ⏱ {:.0}s", self.elapsed), Style::new().fg(ui::DIM)),
             ])),
             Rect { height: 1, ..r },
         );
-        let board = Rect {
-            y: r.y + 1,
-            height: H as u16 + 2,
-            ..r
-        };
+        let board = Rect { y: r.y + 1, height: H as u16 + 2, ..r };
         f.render_widget(ui::panel("Minesweeper", ui::FAINT), board);
         let reveal_all = self.state == State::Lost;
         let buf = f.buffer_mut();
@@ -229,15 +211,9 @@ impl Game for Mines {
                 let i = Self::idx(x, y);
                 let (text, mut style) = if self.open[i] || (reveal_all && self.mine[i]) {
                     if self.mine[i] {
-                        let bg = if self.boom == Some((x, y)) {
-                            Color::Rgb(160, 30, 40)
-                        } else {
-                            Color::Rgb(60, 30, 34)
-                        };
-                        (
-                            "✹ ".to_string(),
-                            Style::new().fg(Color::Rgb(255, 120, 120)).bg(bg),
-                        )
+                        let bg =
+                            if self.boom == Some((x, y)) { Color::Rgb(160, 30, 40) } else { Color::Rgb(60, 30, 34) };
+                        ("✹ ".to_string(), Style::new().fg(Color::Rgb(255, 120, 120)).bg(bg))
                     } else {
                         let n = self.count(x, y);
                         let fg = match n {
@@ -248,51 +224,23 @@ impl Game for Mines {
                             5 => Color::Rgb(255, 170, 80),
                             _ => Color::Rgb(120, 220, 220),
                         };
-                        let t = if n == 0 {
-                            "  ".to_string()
-                        } else {
-                            format!("{n} ")
-                        };
-                        (
-                            t,
-                            Style::new()
-                                .fg(fg)
-                                .bg(Color::Rgb(34, 36, 46))
-                                .add_modifier(Modifier::BOLD),
-                        )
+                        let t = if n == 0 { "  ".to_string() } else { format!("{n} ") };
+                        (t, Style::new().fg(fg).bg(Color::Rgb(34, 36, 46)).add_modifier(Modifier::BOLD))
                     }
                 } else if self.flag[i] {
-                    (
-                        "⚑ ".to_string(),
-                        Style::new().fg(ui::WARN).bg(Color::Rgb(58, 62, 78)),
-                    )
+                    ("⚑ ".to_string(), Style::new().fg(ui::WARN).bg(Color::Rgb(58, 62, 78)))
                 } else {
-                    (
-                        "▪ ".to_string(),
-                        Style::new()
-                            .fg(Color::Rgb(95, 100, 120))
-                            .bg(Color::Rgb(58, 62, 78)),
-                    )
+                    ("▪ ".to_string(), Style::new().fg(Color::Rgb(95, 100, 120)).bg(Color::Rgb(58, 62, 78)))
                 };
                 if (x, y) == self.cursor && !matches!(self.state, State::Won | State::Lost) {
                     style = style.bg(Color::Rgb(120, 160, 230)).fg(Color::Black);
                 }
-                buf.set_string(
-                    board.x + 1 + x as u16 * 2,
-                    board.y + 1 + y as u16,
-                    text,
-                    style,
-                );
+                buf.set_string(board.x + 1 + x as u16 * 2, board.y + 1 + y as u16, text, style);
             }
         }
         f.render_widget(
-            Paragraph::new("arrows move · space open · f flag · esc pause")
-                .style(Style::new().fg(ui::FAINT)),
-            Rect {
-                y: board.y + board.height,
-                height: 1,
-                ..r
-            },
+            Paragraph::new("arrows move · space open · f flag · esc pause").style(Style::new().fg(ui::FAINT)),
+            Rect { y: board.y + board.height, height: 1, ..r },
         );
         match self.state {
             State::Won => ui::modal(

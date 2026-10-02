@@ -88,9 +88,7 @@ pub fn shift(b: &Board, d: (i32, i32)) -> (Board, u64) {
 }
 
 pub fn can_move(b: &Board) -> bool {
-    [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        .iter()
-        .any(|&d| shift(b, d).0 != *b)
+    [(-1, 0), (1, 0), (0, -1), (0, 1)].iter().any(|&d| shift(b, d).0 != *b)
 }
 
 impl Twenty48 {
@@ -99,24 +97,15 @@ impl Twenty48 {
     }
 
     pub fn with_rng(rng: Rng) -> Self {
-        let mut g = Self {
-            board: [[0; 4]; 4],
-            score: 0,
-            rng,
-            undo: None,
-            won: false,
-            keep_going: false,
-        };
+        let mut g = Self { board: [[0; 4]; 4], score: 0, rng, undo: None, won: false, keep_going: false };
         g.spawn();
         g.spawn();
         g
     }
 
     fn spawn(&mut self) {
-        let empty: Vec<(usize, usize)> = (0..4)
-            .flat_map(|y| (0..4).map(move |x| (x, y)))
-            .filter(|&(x, y)| self.board[y][x] == 0)
-            .collect();
+        let empty: Vec<(usize, usize)> =
+            (0..4).flat_map(|y| (0..4).map(move |x| (x, y))).filter(|&(x, y)| self.board[y][x] == 0).collect();
         if let Some(&(x, y)) = empty.get(self.rng.below(empty.len())) {
             self.board[y][x] = if self.rng.chance(0.9) { 2 } else { 4 };
         }
@@ -197,18 +186,11 @@ impl Game for Twenty48 {
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(format!(" Score {}", self.score), Style::new().fg(ui::GOOD)),
-                Span::styled(
-                    if self.undo.is_some() { "   u undo" } else { "" },
-                    Style::new().fg(ui::FAINT),
-                ),
+                Span::styled(if self.undo.is_some() { "   u undo" } else { "" }, Style::new().fg(ui::FAINT)),
             ])),
             Rect { height: 1, ..r },
         );
-        let board = Rect {
-            y: r.y + 1,
-            height: th * 4 + 5,
-            ..r
-        };
+        let board = Rect { y: r.y + 1, height: th * 4 + 5, ..r };
         let buf = f.buffer_mut();
         buf.set_style(board, Style::new().bg(Color::Rgb(28, 30, 38)));
         for (y, row) in self.board.iter().enumerate() {
@@ -228,11 +210,7 @@ impl Game for Twenty48 {
         }
         f.render_widget(
             Paragraph::new("arrows/WASD slide · esc pause").style(Style::new().fg(ui::FAINT)),
-            Rect {
-                y: board.y + board.height,
-                height: 1,
-                ..r
-            },
+            Rect { y: board.y + board.height, height: 1, ..r },
         );
         if self.over() {
             ui::modal(
@@ -251,10 +229,7 @@ impl Game for Twenty48 {
                 board,
                 "2048!",
                 ui::WARN,
-                vec![
-                    Line::from("You made 2048."),
-                    Line::from("any key · keep going").style(Style::new().fg(ui::DIM)),
-                ],
+                vec![Line::from("You made 2048."), Line::from("any key · keep going").style(Style::new().fg(ui::DIM))],
             );
         }
     }
@@ -310,16 +285,9 @@ mod tests {
         g.board = [[2, 2, 0, 0], [0; 4], [0; 4], [0; 4]];
         assert!(g.play((-1, 0)));
         assert_eq!(g.score, 4);
-        let i = Input {
-            pressed: vec![Key::Char('u')],
-            ..Input::default()
-        };
+        let i = Input { pressed: vec![Key::Char('u')], ..Input::default() };
         g.update(0.0, &i);
-        assert_eq!(
-            g.board[0],
-            [2, 2, 0, 0],
-            "undo restored the previous position"
-        );
+        assert_eq!(g.board[0], [2, 2, 0, 0], "undo restored the previous position");
         assert_eq!(g.score, 0);
     }
 }

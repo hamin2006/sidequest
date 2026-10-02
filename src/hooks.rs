@@ -16,11 +16,7 @@ use crate::config::Config;
 use crate::paths;
 
 /// Hook events and the argument sidequest receives for each.
-pub const HOOKS: [(&str, &str); 3] = [
-    ("UserPromptSubmit", "start"),
-    ("Stop", "stop"),
-    ("Notification", "notify"),
-];
+pub const HOOKS: [(&str, &str); 3] = [("UserPromptSubmit", "start"), ("Stop", "stop"), ("Notification", "notify")];
 
 fn session_from_stdin() -> String {
     let stdin = std::io::stdin();
@@ -31,11 +27,7 @@ fn session_from_stdin() -> String {
     let _ = stdin.lock().take(1 << 20).read_to_string(&mut text);
     serde_json::from_str::<Value>(&text)
         .ok()
-        .and_then(|v| {
-            v.get("session_id")
-                .and_then(Value::as_str)
-                .map(String::from)
-        })
+        .and_then(|v| v.get("session_id").and_then(Value::as_str).map(String::from))
         .unwrap_or_else(|| "default".into())
 }
 
@@ -43,10 +35,7 @@ fn session_from_stdin() -> String {
 pub fn spawn_self(args: &[&str]) -> Result<()> {
     let exe = std::env::current_exe().context("can't find own executable")?;
     let mut cmd = Command::new(exe);
-    cmd.args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -67,15 +56,7 @@ pub fn run_hook(which: &str) {
     let session = session_from_stdin();
     let term = std::env::var("TERM_PROGRAM").unwrap_or_default();
     let ms = claude::now_ms();
-    let _ = claude::append(
-        &claude::events_path(),
-        &Event {
-            ms,
-            kind,
-            session: session.clone(),
-            term,
-        },
-    );
+    let _ = claude::append(&claude::events_path(), &Event { ms, kind, session: session.clone(), term });
     if kind == Kind::Start && Config::load(&paths::config_path()).0.enabled {
         let _ = spawn_self(&["_pop", &session, &ms.to_string()]);
     }
@@ -90,8 +71,7 @@ pub fn window_pidfile() -> PathBuf {
 fn pid_alive(pid: i32) -> bool {
     // SAFETY: plain syscall with integer arguments.
     pid > 1
-        && (unsafe { libc::kill(pid, 0) } == 0
-            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
+        && (unsafe { libc::kill(pid, 0) } == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
 }
 
 #[cfg(not(unix))]
@@ -123,33 +103,20 @@ pub fn run_pop(session: &str, start_ms: u64) {
 
 fn command_for(exe: &Path, arg: &str) -> String {
     let exe = exe.display().to_string();
-    let exe = if exe.contains(' ') {
-        format!("\"{exe}\"")
-    } else {
-        exe
-    };
+    let exe = if exe.contains(' ') { format!("\"{exe}\"") } else { exe };
     format!("{exe} hook {arg}")
 }
 
 /// `…/sidequest hook start`, with or without quotes around a path containing spaces.
 fn is_our_command(c: &str) -> bool {
-    c.contains("sidequest")
-        && HOOKS
-            .iter()
-            .any(|(_, arg)| c.trim_end().ends_with(&format!(" hook {arg}")))
+    c.contains("sidequest") && HOOKS.iter().any(|(_, arg)| c.trim_end().ends_with(&format!(" hook {arg}")))
 }
 
 fn is_ours(entry: &Value) -> bool {
     entry
         .get("hooks")
         .and_then(Value::as_array)
-        .is_some_and(|hs| {
-            hs.iter().any(|h| {
-                h.get("command")
-                    .and_then(Value::as_str)
-                    .is_some_and(is_our_command)
-            })
-        })
+        .is_some_and(|hs| hs.iter().any(|h| h.get("command").and_then(Value::as_str).is_some_and(is_our_command)))
 }
 
 /// Adds sidequest's hooks to a settings object, replacing any older sidequest entries and keeping
@@ -158,19 +125,11 @@ pub fn add_hooks(settings: &mut Value, exe: &Path) -> Result<()> {
     if !settings.is_object() {
         bail!("settings.json is not a JSON object");
     }
-    let hooks = settings
-        .as_object_mut()
-        .unwrap()
-        .entry("hooks")
-        .or_insert_with(|| json!({}));
-    let Some(hooks) = hooks.as_object_mut() else {
-        bail!("\"hooks\" in settings.json is not an object")
-    };
+    let hooks = settings.as_object_mut().unwrap().entry("hooks").or_insert_with(|| json!({}));
+    let Some(hooks) = hooks.as_object_mut() else { bail!("\"hooks\" in settings.json is not an object") };
     for (event, arg) in HOOKS {
         let list = hooks.entry(event).or_insert_with(|| json!([]));
-        let Some(list) = list.as_array_mut() else {
-            bail!("hooks.{event} is not a list")
-        };
+        let Some(list) = list.as_array_mut() else { bail!("hooks.{event} is not a list") };
         list.retain(|e| !is_ours(e));
         list.push(json!({ "hooks": [{ "type": "command", "command": command_for(exe, arg), "timeout": 5 }] }));
     }
@@ -212,8 +171,9 @@ pub fn installed(settings: &Value) -> bool {
 fn read_settings(path: &Path) -> Result<Value> {
     match std::fs::read_to_string(path) {
         Ok(t) if t.trim().is_empty() => Ok(json!({})),
-        Ok(t) => serde_json::from_str(&t)
-            .with_context(|| format!("{} isn't valid JSON; not touching it", path.display())),
+        Ok(t) => {
+            serde_json::from_str(&t).with_context(|| format!("{} isn't valid JSON; not touching it", path.display()))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
         Err(e) => Err(e.into()),
     }
@@ -221,8 +181,7 @@ fn read_settings(path: &Path) -> Result<Value> {
 
 fn write_settings(path: &Path, v: &Value) -> Result<()> {
     if path.exists() {
-        std::fs::copy(path, path.with_extension("json.sidequest-backup"))
-            .context("backing up settings.json")?;
+        std::fs::copy(path, path.with_extension("json.sidequest-backup")).context("backing up settings.json")?;
     }
     crate::store::write_atomic(path, (serde_json::to_string_pretty(v)? + "\n").as_bytes())?;
     Ok(())
@@ -261,15 +220,8 @@ mod tests {
         add_hooks(&mut s, Path::new("/usr/local/bin/sidequest")).unwrap(); // idempotent
         assert!(installed(&s));
         assert_eq!(s["theme"], "dark");
-        assert_eq!(
-            s["hooks"]["Stop"].as_array().unwrap().len(),
-            2,
-            "the user's own Stop hook is kept"
-        );
-        assert_eq!(
-            s["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
-            "/usr/local/bin/sidequest hook start"
-        );
+        assert_eq!(s["hooks"]["Stop"].as_array().unwrap().len(), 2, "the user's own Stop hook is kept");
+        assert_eq!(s["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"], "/usr/local/bin/sidequest hook start");
         assert!(s["hooks"]["PreToolUse"].is_array());
 
         assert!(remove_hooks(&mut s));
@@ -282,10 +234,7 @@ mod tests {
     fn uninstall_cleans_up_empty_sections() {
         let mut s = json!({});
         add_hooks(&mut s, Path::new("/x/my apps/sidequest")).unwrap();
-        assert_eq!(
-            s["hooks"]["Stop"][0]["hooks"][0]["command"],
-            "\"/x/my apps/sidequest\" hook stop"
-        );
+        assert_eq!(s["hooks"]["Stop"][0]["hooks"][0]["command"], "\"/x/my apps/sidequest\" hook stop");
         remove_hooks(&mut s);
         assert_eq!(s, json!({}));
     }

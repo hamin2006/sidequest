@@ -88,11 +88,9 @@ impl Arcade {
             autosave: 0.0,
             score_check: 0.0,
         };
-        let target = start.map(String::from).or_else(|| {
-            (mode == Mode::Auto)
-                .then(|| a.store.last_game().map(String::from))
-                .flatten()
-        });
+        let target = start
+            .map(String::from)
+            .or_else(|| (mode == Mode::Auto).then(|| a.store.last_game().map(String::from)).flatten());
         if let Some(info) = target.as_deref().and_then(games::find) {
             a.menu_sel = CATALOG.iter().position(|g| g.id == info.id).unwrap_or(0);
             a.open(info, false);
@@ -115,25 +113,12 @@ impl Arcade {
     }
 
     fn open(&mut self, info: &'static GameInfo, fresh: bool) {
-        let resumed = if fresh {
-            None
-        } else {
-            self.store.load(info.id).and_then(|v| (info.load)(&v))
-        };
+        let resumed = if fresh { None } else { self.store.load(info.id).and_then(|v| (info.load)(&v)) };
         let was_saved = resumed.is_some();
         let game = resumed.unwrap_or_else(|| (info.new)());
-        let countdown = if was_saved && game.realtime() {
-            3.0
-        } else {
-            0.0
-        };
+        let countdown = if was_saved && game.realtime() { 3.0 } else { 0.0 };
         self.store.set_last_game(info.id);
-        self.screen = Screen::Play(Box::new(Session {
-            info,
-            game,
-            pause: None,
-            countdown,
-        }));
+        self.screen = Screen::Play(Box::new(Session { info, game, pause: None, countdown }));
         self.autosave = 0.0;
     }
 
@@ -162,10 +147,7 @@ impl Arcade {
         if let Screen::Play(s) = &mut self.screen
             && s.pause.is_none()
         {
-            s.pause = Some(Pause {
-                reason: Reason::Claude,
-                sel: 0,
-            });
+            s.pause = Some(Pause { reason: Reason::Claude, sel: 0 });
         }
         self.save_current();
     }
@@ -215,9 +197,7 @@ impl Arcade {
                 Key::Up | Key::Char('w') | Key::Char('k') => {
                     self.menu_sel = (self.menu_sel + CATALOG.len() - 1) % CATALOG.len()
                 }
-                Key::Down | Key::Char('s') | Key::Char('j') => {
-                    self.menu_sel = (self.menu_sel + 1) % CATALOG.len()
-                }
+                Key::Down | Key::Char('s') | Key::Char('j') => self.menu_sel = (self.menu_sel + 1) % CATALOG.len(),
                 Key::Enter | Key::Space => {
                     self.open(&CATALOG[self.menu_sel], false);
                     return;
@@ -252,9 +232,7 @@ impl Arcade {
             for k in &input.pressed {
                 match k {
                     Key::Esc | Key::Char('p') => action = Some(0),
-                    Key::Up | Key::Char('w') => {
-                        p.sel = (p.sel + PAUSE_ITEMS.len() - 1) % PAUSE_ITEMS.len()
-                    }
+                    Key::Up | Key::Char('w') => p.sel = (p.sel + PAUSE_ITEMS.len() - 1) % PAUSE_ITEMS.len(),
                     Key::Down | Key::Char('s') => p.sel = (p.sel + 1) % PAUSE_ITEMS.len(),
                     Key::Enter | Key::Space => action = Some(p.sel),
                     Key::Char('r') => action = Some(1),
@@ -278,10 +256,7 @@ impl Arcade {
             return;
         }
         if input.was(Key::Esc) || input.char_pressed('p') {
-            s.pause = Some(Pause {
-                reason: Reason::User,
-                sel: 0,
-            });
+            s.pause = Some(Pause { reason: Reason::User, sel: 0 });
             self.save_current();
             return;
         }
@@ -313,21 +288,12 @@ impl Arcade {
 
     pub fn draw(&mut self, f: &mut Frame) {
         let area = f.area();
-        f.buffer_mut().set_style(
-            area,
-            Style::new()
-                .bg(Color::Rgb(10, 11, 16))
-                .fg(Color::Rgb(220, 222, 230)),
-        );
+        f.buffer_mut().set_style(area, Style::new().bg(Color::Rgb(10, 11, 16)).fg(Color::Rgb(220, 222, 230)));
         if area.width < 20 || area.height < 4 {
             return;
         }
         let bar = Rect { height: 1, ..area };
-        let body = Rect {
-            y: area.y + 1,
-            height: area.height - 1,
-            ..area
-        };
+        let body = Rect { y: area.y + 1, height: area.height - 1, ..area };
         self.draw_bar(f, bar);
         match &mut self.screen {
             Screen::Menu => {}
@@ -340,17 +306,10 @@ impl Arcade {
     }
 
     fn draw_bar(&self, f: &mut Frame, bar: Rect) {
-        f.buffer_mut()
-            .set_style(bar, Style::new().bg(Color::Rgb(18, 20, 28)));
-        let mut left = vec![Span::styled(
-            " ◆ sidequest ",
-            Style::new().fg(ui::ACCENT).add_modifier(Modifier::BOLD),
-        )];
+        f.buffer_mut().set_style(bar, Style::new().bg(Color::Rgb(18, 20, 28)));
+        let mut left = vec![Span::styled(" ◆ sidequest ", Style::new().fg(ui::ACCENT).add_modifier(Modifier::BOLD))];
         if let Screen::Play(s) = &self.screen {
-            left.push(Span::styled(
-                format!("› {} ", s.info.title),
-                Style::new().fg(Color::White),
-            ));
+            left.push(Span::styled(format!("› {} ", s.info.title), Style::new().fg(Color::White)));
         }
         if self.new_best.is_some_and(|t| self.time - t < 3.0) {
             left.push(Span::styled(" ★ new best ", Style::new().fg(ui::WARN)));
@@ -358,43 +317,22 @@ impl Arcade {
         f.render_widget(Paragraph::new(Line::from(left)), bar);
 
         let right = if self.banner.is_some() {
-            Span::styled(
-                "✓ Claude is done ",
-                Style::new().fg(ui::GOOD).add_modifier(Modifier::BOLD),
-            )
+            Span::styled("✓ Claude is done ", Style::new().fg(ui::GOOD).add_modifier(Modifier::BOLD))
         } else if self.claude_busy > 0 {
             let spin = ["◐", "◓", "◑", "◒"][(self.time * 6.0) as usize % 4];
-            let n = if self.claude_busy > 1 {
-                format!(" ×{}", self.claude_busy)
-            } else {
-                String::new()
-            };
-            Span::styled(
-                format!("{spin} Claude is working{n} "),
-                Style::new().fg(ui::WARN),
-            )
+            let n = if self.claude_busy > 1 { format!(" ×{}", self.claude_busy) } else { String::new() };
+            Span::styled(format!("{spin} Claude is working{n} "), Style::new().fg(ui::WARN))
         } else {
             Span::styled("○ Claude idle ", Style::new().fg(ui::FAINT))
         };
         let w = right.width() as u16;
         if bar.width > w + 30 {
-            f.render_widget(
-                Paragraph::new(right),
-                Rect {
-                    x: bar.x + bar.width - w,
-                    width: w,
-                    ..bar
-                },
-            );
+            f.render_widget(Paragraph::new(right), Rect { x: bar.x + bar.width - w, width: w, ..bar });
         }
     }
 
     fn draw_menu(&self, f: &mut Frame, body: Rect) {
-        let logo = [
-            "┏━┓╻╺┳┓┏━╸┏━┓╻ ╻┏━╸┏━┓╺┳╸",
-            "┗━┓┃ ┃┃┣╸ ┃┓┃┃ ┃┣╸ ┗━┓ ┃ ",
-            "┗━┛╹╺┻┛┗━╸┗┻┛┗━┛┗━╸┗━┛ ╹ ",
-        ];
+        let logo = ["┏━┓╻╺┳┓┏━╸┏━┓╻ ╻┏━╸┏━┓╺┳╸", "┗━┓┃ ┃┃┣╸ ┃┓┃┃ ┃┣╸ ┗━┓ ┃ ", "┗━┛╹╺┻┛┗━╸┗┻┛┗━┛┗━╸┗━┛ ╹ "];
         let width = 72.min(body.width.saturating_sub(2));
         let height = (logo.len() + 3 + CATALOG.len() * 3 + 2) as u16;
         let r = ui::centered(body, width, height.min(body.height));
@@ -402,20 +340,10 @@ impl Arcade {
             .iter()
             .enumerate()
             .map(|(i, l)| {
-                Line::styled(
-                    *l,
-                    Style::new().fg([
-                        ui::ACCENT,
-                        Color::Rgb(150, 170, 255),
-                        Color::Rgb(190, 140, 255),
-                    ][i]),
-                )
+                Line::styled(*l, Style::new().fg([ui::ACCENT, Color::Rgb(150, 170, 255), Color::Rgb(190, 140, 255)][i]))
             })
             .collect();
-        lines.push(Line::styled(
-            "games for while Claude is thinking",
-            Style::new().fg(ui::DIM),
-        ));
+        lines.push(Line::styled("games for while Claude is thinking", Style::new().fg(ui::DIM)));
         lines.push(Line::from(""));
         for (i, g) in CATALOG.iter().enumerate() {
             let sel = i == self.menu_sel;
@@ -425,11 +353,7 @@ impl Arcade {
                 Span::styled(
                     g.title,
                     Style::new()
-                        .fg(if sel {
-                            Color::White
-                        } else {
-                            Color::Rgb(200, 204, 214)
-                        })
+                        .fg(if sel { Color::White } else { Color::Rgb(200, 204, 214) })
                         .add_modifier(Modifier::BOLD),
                 ),
             ];
@@ -442,32 +366,19 @@ impl Arcade {
             if self.store.has_save(g.id) {
                 row.push(Span::styled("   ▶ continue", Style::new().fg(ui::GOOD)));
             }
-            let style = if sel {
-                Style::new().bg(Color::Rgb(34, 38, 54))
-            } else {
-                Style::new()
-            };
+            let style = if sel { Style::new().bg(Color::Rgb(34, 38, 54)) } else { Style::new() };
             lines.push(Line::from(row).style(style).left_aligned());
             lines.push(
-                Line::styled(
-                    format!("     {}", ui_trunc(g.tagline, width as usize - 6)),
-                    Style::new().fg(ui::DIM),
-                )
-                .style(style)
-                .left_aligned(),
+                Line::styled(format!("     {}", ui_trunc(g.tagline, width as usize - 6)), Style::new().fg(ui::DIM))
+                    .style(style)
+                    .left_aligned(),
             );
             lines.push(Line::from(""));
         }
         let hint = if self.confirm_new {
-            Line::styled(
-                "Start over and erase your saved run? y / n",
-                Style::new().fg(ui::WARN),
-            )
+            Line::styled("Start over and erase your saved run? y / n", Style::new().fg(ui::WARN))
         } else {
-            Line::styled(
-                "↑↓ choose · enter play · n new game · esc close",
-                Style::new().fg(ui::FAINT),
-            )
+            Line::styled("↑↓ choose · enter play · n new game · esc close", Style::new().fg(ui::FAINT))
         };
         lines.push(hint);
         let para = Paragraph::new(lines).centered();
@@ -483,11 +394,7 @@ impl Arcade {
                 Reason::Claude => "Claude is done",
                 Reason::User => "Paused",
             };
-            let color = if p.reason == Reason::Claude {
-                ui::GOOD
-            } else {
-                ui::ACCENT
-            };
+            let color = if p.reason == Reason::Claude { ui::GOOD } else { ui::ACCENT };
             let mut lines = vec![];
             if p.reason == Reason::Claude {
                 lines.push(Line::styled(
@@ -502,11 +409,8 @@ impl Arcade {
             }
             if !(p.reason == Reason::Claude && self.mode == Mode::Auto) {
                 for (i, item) in PAUSE_ITEMS.iter().enumerate() {
-                    let st = if i == p.sel {
-                        Style::new().fg(Color::Black).bg(color)
-                    } else {
-                        Style::new().fg(ui::DIM)
-                    };
+                    let st =
+                        if i == p.sel { Style::new().fg(Color::Black).bg(color) } else { Style::new().fg(ui::DIM) };
                     lines.push(Line::styled(format!("  {item}  "), st));
                 }
             }
@@ -517,10 +421,7 @@ impl Arcade {
             f.render_widget(Clear, r);
             f.render_widget(
                 Paragraph::new(vec![
-                    Line::styled(
-                        format!("Resuming in {n}…"),
-                        Style::new().fg(ui::WARN).add_modifier(Modifier::BOLD),
-                    ),
+                    Line::styled(format!("Resuming in {n}…"), Style::new().fg(ui::WARN).add_modifier(Modifier::BOLD)),
                     Line::styled("esc for menu", Style::new().fg(ui::FAINT)),
                 ])
                 .centered()
@@ -549,28 +450,17 @@ mod tests {
 
     fn arcade(mode: Mode, start: Option<&str>) -> (Arcade, tempfile::TempDir) {
         let d = tempfile::tempdir().unwrap();
-        (
-            Arcade::new(Store::open(d.path().to_path_buf()), mode, start),
-            d,
-        )
+        (Arcade::new(Store::open(d.path().to_path_buf()), mode, start), d)
     }
 
     fn keys(ks: &[Key]) -> Input {
-        Input {
-            pressed: ks.to_vec(),
-            ..Input::default()
-        }
+        Input { pressed: ks.to_vec(), ..Input::default() }
     }
 
     fn render(a: &mut Arcade, w: u16, h: u16) -> String {
         let mut t = Terminal::new(TestBackend::new(w, h)).unwrap();
         t.draw(|f| a.draw(f)).unwrap();
-        t.backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect()
+        t.backend().buffer().content().iter().map(|c| c.symbol()).collect()
     }
 
     #[test]
@@ -614,10 +504,7 @@ mod tests {
         assert!(!a.quit);
         a.update(0.02, &keys(&[Key::Space]));
         a.update(0.02, &keys(&[Key::Esc])); // resume from the pause menu
-        assert!(
-            a.paused(),
-            "resume starts with a countdown for real-time games"
-        );
+        assert!(a.paused(), "resume starts with a countdown for real-time games");
         for _ in 0..100 {
             a.update(0.02, &Input::default());
         }
@@ -628,11 +515,7 @@ mod tests {
     fn auto_mode_resumes_last_game_with_countdown() {
         let d = tempfile::tempdir().unwrap();
         {
-            let mut a = Arcade::new(
-                Store::open(d.path().to_path_buf()),
-                Mode::Manual,
-                Some("invaders"),
-            );
+            let mut a = Arcade::new(Store::open(d.path().to_path_buf()), Mode::Manual, Some("invaders"));
             a.update(0.1, &Input::default());
             a.save_current();
         }
@@ -660,15 +543,7 @@ mod tests {
     fn every_game_renders_at_every_size() {
         for g in CATALOG {
             let (mut a, _d) = arcade(Mode::Manual, Some(g.id));
-            for (w, h) in [
-                (1, 1),
-                (10, 3),
-                (20, 4),
-                (40, 12),
-                (80, 24),
-                (104, 34),
-                (200, 60),
-            ] {
+            for (w, h) in [(1, 1), (10, 3), (20, 4), (40, 12), (80, 24), (104, 34), (200, 60)] {
                 render(&mut a, w, h);
             }
             for _ in 0..30 {

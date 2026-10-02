@@ -7,10 +7,7 @@ fn home() -> PathBuf {
 }
 
 fn xdg(var: &str, fallback: &str) -> PathBuf {
-    std::env::var_os(var)
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .unwrap_or_else(|| home().join(fallback))
+    std::env::var_os(var).map(PathBuf::from).filter(|p| p.is_absolute()).unwrap_or_else(|| home().join(fallback))
 }
 
 /// `$SIDEQUEST_STATE_DIR`, else `$XDG_STATE_HOME/sidequest`, else `~/.local/state/sidequest`.
@@ -26,9 +23,7 @@ pub fn config_path() -> PathBuf {
     if let Some(p) = std::env::var_os("SIDEQUEST_CONFIG") {
         return PathBuf::from(p);
     }
-    xdg("XDG_CONFIG_HOME", ".config")
-        .join("sidequest")
-        .join("config.toml")
+    xdg("XDG_CONFIG_HOME", ".config").join("sidequest").join("config.toml")
 }
 
 /// `$SIDEQUEST_CLAUDE_SETTINGS`, else `~/.claude/settings.json`.

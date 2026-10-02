@@ -51,14 +51,9 @@ impl Config {
         match std::fs::read_to_string(path) {
             Ok(t) => match Self::parse(&t) {
                 Ok(c) => (c, None),
-                Err(e) => (
-                    Self::default(),
-                    Some(format!(
-                        "ignoring {}: {}",
-                        path.display(),
-                        e.lines().next().unwrap_or(&e)
-                    )),
-                ),
+                Err(e) => {
+                    (Self::default(), Some(format!("ignoring {}: {}", path.display(), e.lines().next().unwrap_or(&e))))
+                }
             },
             Err(_) => (Self::default(), None),
         }
@@ -87,11 +82,7 @@ mod tests {
     fn write_then_load() {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("c.toml");
-        let c = Config {
-            delay_secs: 3.0,
-            enabled: false,
-            ..Config::default()
-        };
+        let c = Config { delay_secs: 3.0, enabled: false, ..Config::default() };
         c.write(&p).unwrap();
         assert_eq!(Config::load(&p).0, c);
         std::fs::write(&p, "delay_secs = \"x\"").unwrap();
