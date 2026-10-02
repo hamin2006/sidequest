@@ -98,12 +98,17 @@ pub struct World {
     pub singer: (i32, i32),
 }
 
-/// Smooth value noise in roughly [0, 1).
+/// SplitMix64 finalizer: every input bit affects every output bit.
+fn mix(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// Hash of a lattice point in [0, 1). The seed is mixed first so nearby seeds (and `seed ^ small`)
+/// give unrelated noise fields.
 fn hash(seed: u64, x: i32, y: i32) -> f64 {
-    let mut h = seed ^ (x as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (y as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
-    h ^= h >> 33;
-    h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    h ^= h >> 33;
+    let h = mix(mix(seed) ^ ((x as u32 as u64) | ((y as u32 as u64) << 32)));
     (h >> 11) as f64 / (1u64 << 53) as f64
 }
 
@@ -254,6 +259,21 @@ impl World {
         None
     }
 
+    /// Any reachable water cell with rock directly below, scanning the band (offset varies by `salt`).
+    fn resting_spot(&self, top: i32, bottom: i32, salt: i32) -> Option<(i32, i32)> {
+        let rows = bottom - top + 1;
+        (0..rows).map(|i| top + (i + salt * 17).rem_euclid(rows)).find_map(|y| {
+            (2..W - 2)
+                .map(|i| 2 + (i + salt * 31) % (W - 4))
+                .find(|&x| self.get(x, y) == WATER && self.solid(x, y + 1))
+                .map(|x| (x, y))
+        })
+    }
+
+    fn near_wreck(&self, x: i32, y: i32) -> bool {
+        self.wrecks.iter().any(|w| (w.x - x).abs() < 9 && (w.y - y).abs() < 4)
+    }
+
     fn open_spot(&self, rng: &mut Rng, top: i32, bottom: i32) -> Option<(i32, i32)> {
         for _ in 0..200 {
             let (x, y) = (rng.range(2, W - 3), rng.range(top, bottom));
@@ -276,10 +296,33 @@ impl World {
     }
 
     fn place_wrecks(&mut self, rng: &mut Rng, missing_logs: &[u8], floor_cx: i32) {
-        // Ordinary wrecks, more and richer with depth.
+        // Each missing Meridian log lies in its own depth band.
+        for &log in missing_logs {
+            let top = 25 + log as i32 * 82;
+            let bottom = (top + 80).min(H - 20);
+            // Prefer a proper seabed spot; fall back to any water cell resting on rock so every log
+            // can always be found.
+            let spot = self.seabed_spot(rng, top, bottom).or_else(|| self.resting_spot(top, bottom, log as i32));
+            if let Some((x, y)) = spot {
+                self.wrecks.push(Wreck {
+                    x,
+                    y,
+                    half: 2,
+                    scrap: 15,
+                    battery: false,
+                    patch: false,
+                    relic: false,
+                    log: Some(log),
+                    beacon: true,
+                    meridian: false,
+                });
+            }
+        }
+        // Ordinary wrecks fill in around the logs (placed first so they always get a spot), never
+        // close enough to another wreck to be confused with it.
         for (top, bottom, count) in [(22, 100, 3), (100, 400, 8), (400, 600, 6), (600, H - 20, 8)] {
             for _ in 0..count {
-                if let Some((x, y)) = self.seabed_spot(rng, top, bottom) {
+                if let Some((x, y)) = self.seabed_spot(rng, top, bottom).filter(|&(x, y)| !self.near_wreck(x, y)) {
                     let deep = y as f64 / H as f64;
                     self.wrecks.push(Wreck {
                         x,
@@ -294,25 +337,6 @@ impl World {
                         meridian: false,
                     });
                 }
-            }
-        }
-        // Each missing Meridian log lies in its own depth band.
-        for &log in missing_logs {
-            let top = 25 + log as i32 * 82;
-            let bottom = (top + 80).min(H - 20);
-            if let Some((x, y)) = self.seabed_spot(rng, top, bottom) {
-                self.wrecks.push(Wreck {
-                    x,
-                    y,
-                    half: 2,
-                    scrap: 15,
-                    battery: false,
-                    patch: false,
-                    relic: false,
-                    log: Some(log),
-                    beacon: true,
-                    meridian: false,
-                });
             }
         }
         self.wrecks.push(Wreck {
@@ -398,7 +422,7 @@ mod tests {
     fn logs_meridian_and_zones() {
         let w = World::generate(7, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
         let logs: Vec<u8> = w.wrecks.iter().filter_map(|x| x.log).collect();
-        assert!(logs.len() >= 10, "most log wrecks placed: {logs:?}");
+        assert_eq!(logs.len(), 12, "every log is placed: {logs:?}");
         assert_eq!(w.wrecks.iter().filter(|x| x.meridian).count(), 1);
         assert!(w.spawns.iter().any(|s| s.species == Species::Leviathan));
         assert_eq!(zone_index(0), 0);
@@ -408,6 +432,32 @@ mod tests {
 
         let none = World::generate(7, &[]);
         assert!(none.wrecks.iter().all(|x| x.log.is_none()));
+    }
+
+    #[test]
+    fn different_seeds_give_different_trenches() {
+        let a = World::generate(0, &[]);
+        for seed in [1u64, 2, 3, 0xA5] {
+            let b = World::generate(seed, &[]);
+            let differ = a.cells.iter().zip(&b.cells).filter(|(x, y)| x != y).count();
+            assert!(differ > a.cells.len() / 8, "seed {seed} looks like seed 0 ({differ} cells differ)");
+        }
+        let corr = (0..2000)
+            .filter(|i| (noise(5, *i as f64 * 0.3, 1.7) > 0.5) == (noise(5 ^ 0x77, *i as f64 * 0.3, 1.7) > 0.5))
+            .count();
+        assert!((600..1400).contains(&corr), "noise layers are independent ({corr}/2000 agree)");
+    }
+
+    #[test]
+    fn wrecks_never_overlap() {
+        for seed in 0..20u64 {
+            let w = World::generate(seed, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+            for (i, a) in w.wrecks.iter().enumerate() {
+                for b in &w.wrecks[i + 1..] {
+                    assert!((a.x - b.x).abs() >= 4 || (a.y - b.y).abs() >= 2, "seed {seed}: wrecks too close");
+                }
+            }
+        }
     }
 
     #[test]

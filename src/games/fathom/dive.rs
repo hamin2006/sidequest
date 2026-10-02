@@ -501,7 +501,18 @@ impl Dive {
 
     fn wreck_here(&self) -> Option<usize> {
         let world = self.world();
-        world.wrecks.iter().position(|w| dist(w.x, w.y, self.sub.x, self.sub.y) <= 1.6)
+        // Nearest wreck in reach, preferring ones not yet stripped.
+        world
+            .wrecks
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| dist(w.x, w.y, self.sub.x, self.sub.y) <= 1.6)
+            .min_by(|(i, a), (j, b)| {
+                (self.looted[*i], dist(a.x, a.y, self.sub.x, self.sub.y))
+                    .partial_cmp(&(self.looted[*j], dist(b.x, b.y, self.sub.x, self.sub.y)))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(i, _)| i)
     }
 
     fn start_salvage(&mut self) {
@@ -709,10 +720,10 @@ impl Dive {
         // Battery, pressure, vents.
         let mut drain = 0.18;
         if self.sub.moved > 0.0 {
-            drain += 0.32;
+            drain += 0.25;
         }
         if self.sub.lamp {
-            drain += 0.35;
+            drain += 0.25;
         }
         if boost && self.sub.moved > 0.0 {
             drain += 0.6;
@@ -937,7 +948,7 @@ impl Dive {
                     speed = 0.0;
                     if d <= 1.2 && c.cd <= 0.0 {
                         c.cd = 3.0;
-                        damage.push((22.0, 0.0, "Something enormous snaps at you from the wall!"));
+                        damage.push((18.0, 0.0, "Something enormous snaps at you from the wall!"));
                     }
                 }
                 Species::Angler => {
@@ -1005,7 +1016,7 @@ impl Dive {
                     }
                     if matches!(c.state, CState::Hunt | CState::Search) && d <= 1.5 && c.cd <= 0.0 {
                         c.cd = 2.5;
-                        damage.push((12.0, 0.0, "Hunter eel! It bites and darts away."));
+                        damage.push((10.0, 0.0, "Hunter eel! It bites and darts away."));
                         c.state = CState::Retreat;
                         c.timer = 1.5;
                         let away = if c.x >= sx { 1 } else { -1 };
@@ -1632,7 +1643,9 @@ mod tests {
 
     #[test]
     fn salvaging_a_log_wreck() {
-        let p = Progress::default();
+        // A fully rated hull so deep log wrecks don't crush the sub mid-salvage.
+        let mut p = Progress::default();
+        p.upgrades.insert(Upgrade::Hull, 4);
         let mut d = dive();
         let w = d.world();
         let (wi, wreck) = w.wrecks.iter().enumerate().find(|(_, w)| w.log.is_some()).unwrap();
@@ -1677,6 +1690,58 @@ mod tests {
         assert_eq!(back.sub.x, d.sub.x);
         assert_eq!(back.charted, d.charted);
         back.update(0.016, &Input::default(), &p);
+    }
+
+    /// A crude bot that dives: down when it can, sideways when blocked, pings every few seconds.
+    /// Run with `cargo test playthrough -- --ignored --nocapture` to see balance numbers.
+    #[test]
+    #[ignore]
+    fn playthrough() {
+        let p = Progress::default();
+        for seed in 0..8 {
+            let mut d = Dive::new(seed, &p, 0);
+            let mut rng = Rng::new(seed);
+            let mut side = 1;
+            let mut ping_t = 0.0;
+            let mut hits = 0.0;
+            let mut last_hull = d.sub.hull;
+            for _ in 0..(180.0 / 0.05) as usize {
+                let w = d.world();
+                let mut keys = vec![];
+                if !w.solid(d.sub.x, d.sub.y + 1) {
+                    keys.push(Key::Down);
+                } else {
+                    if w.solid(d.sub.x + side, d.sub.y) || rng.chance(0.02) {
+                        side = -side;
+                    }
+                    keys.push(if side > 0 { Key::Right } else { Key::Left });
+                }
+                ping_t += 0.05;
+                if ping_t > 3.0 {
+                    ping_t = 0.0;
+                    keys.push(Key::Space);
+                }
+                d.update(0.05, &Input { pressed: keys, ..Input::default() }, &p);
+                if d.sub.hull < last_hull - 1.0 {
+                    hits += last_hull - d.sub.hull;
+                }
+                last_hull = d.sub.hull;
+                if d.outcome.is_some() || d.popup.is_some() {
+                    d.popup = None;
+                    if d.outcome.is_some() {
+                        break;
+                    }
+                }
+            }
+            println!(
+                "seed {seed}: depth {:>5} m  hull {:>5.1}  batt {:>5.1}  attack dmg {:>5.1}  outcome {:?}",
+                d.max_row * 10,
+                d.sub.hull,
+                d.sub.battery,
+                hits,
+                d.outcome
+            );
+        }
     }
 
     #[test]
