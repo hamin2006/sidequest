@@ -161,14 +161,24 @@ struct WindowApp {
     last: Instant,
     last_poll: Instant,
     first_frame: bool,
+    /// Still floating above other windows (dropped the first time you click away).
+    on_top: bool,
+    /// Window is focused and not minimized: you're playing right now.
+    engaged: bool,
     done_term: Arc<Mutex<Option<String>>>,
     /// Debug/testing: keys to inject at given times and a path to save a screenshot of the window.
     script: std::collections::VecDeque<(f64, Key)>,
+    /// Debug/testing: `SIDEQUEST_SCRIPT="2:minimize"` minimizes the window at that time.
+    minimize_at: Option<f64>,
     snapshot: Option<(std::path::PathBuf, f64, bool)>,
     started: Instant,
 }
 
 /// `SIDEQUEST_SCRIPT="0.5:enter,1.0:space"`: keys to press at those times (seconds after opening).
+fn script_minimize_at(s: &str) -> Option<f64> {
+    s.split(',').find_map(|item| item.trim().strip_suffix(":minimize")?.parse().ok())
+}
+
 fn parse_script(s: &str) -> std::collections::VecDeque<(f64, Key)> {
     s.split(',')
         .filter_map(|item| {
@@ -218,15 +228,20 @@ fn write_bmp(path: &std::path::Path, img: &egui::ColorImage) -> std::io::Result<
 }
 
 impl WindowApp {
-    fn gather_input(&self, ctx: &egui::Context) -> (Input, bool) {
+    fn gather_input(&self, ctx: &egui::Context) -> (Input, bool, bool) {
         let mut input = Input { held_reliable: true, ..Input::default() };
         let mut close = false;
+        let mut minimize = false;
         ctx.input(|i| {
             for ev in &i.events {
                 match ev {
                     egui::Event::Key { key, pressed: true, repeat, modifiers, .. } => {
                         if modifiers.command && *key == egui::Key::W {
                             close = true;
+                        }
+                        if modifiers.command && *key == egui::Key::M {
+                            minimize = true;
+                            continue;
                         }
                         // Named keys come from Key events; letters and symbols from Text (respects layouts).
                         if !*repeat
@@ -249,7 +264,11 @@ impl WindowApp {
             input.shift = i.modifiers.shift;
             close |= i.viewport().close_requested();
         });
-        (input, close)
+        // Text events for "m" arrive alongside Cmd+M; drop them so the game doesn't see an "m".
+        if minimize {
+            input.pressed.retain(|k| *k != Key::Char('m'));
+        }
+        (input, close, minimize)
     }
 
     fn paint(&self, ui: &egui::Ui, origin: Pos2, cell: Vec2) {
@@ -346,16 +365,23 @@ impl WindowApp {
 }
 
 impl eframe::App for WindowApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx().clone();
+    /// Advances the game and watches Claude. eframe keeps calling this while the window is minimized,
+    /// so a hidden window still notices when Claude finishes.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(16));
         if self.first_frame {
             self.first_frame = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
 
-        let (mut input, close_requested) = self.gather_input(&ctx);
+        let (mut input, close_requested, mut minimize) = self.gather_input(ctx);
+        let (focused, minimized) =
+            ctx.input(|i| (i.viewport().focused.unwrap_or(true), i.viewport().minimized.unwrap_or(false)));
         let elapsed = self.started.elapsed().as_secs_f64();
+        if self.minimize_at.is_some_and(|t| elapsed >= t) {
+            self.minimize_at = None;
+            minimize = true;
+        }
         while self.script.front().is_some_and(|(t, _)| *t <= elapsed) {
             if let Some((_, k)) = self.script.pop_front() {
                 input.pressed.push(k);
@@ -388,22 +414,42 @@ impl eframe::App for WindowApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
+        if minimize {
+            self.arcade.pause();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
+        // Stepped away (another app focused, or minimized): pause, and stop floating above other
+        // windows so it can go behind them like a normal window.
+        if !focused || minimized {
+            self.arcade.pause();
+            if self.on_top {
+                self.on_top = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::Normal));
+            }
+        }
+        self.engaged = focused && !minimized;
+
         if self.last_poll.elapsed() > Duration::from_millis(200) {
             self.last_poll = Instant::now();
             if let Some(term) = super::pump_claude(&mut self.watcher, &mut self.arcade)
                 && let Ok(mut d) = self.done_term.lock()
             {
-                *d = Some(term);
+                // Only pull you back to the terminal if you were actually playing.
+                *d = self.engaged.then_some(term);
             }
         }
         let dt = self.last.elapsed().as_secs_f64();
         self.last = Instant::now();
+        let input = if self.engaged { input } else { Input { held_reliable: true, ..Input::default() } };
         self.arcade.update(dt, &input);
         if self.arcade.quit {
             self.arcade.save_current();
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
+    }
 
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         // Fit the character grid to the window.
         let rect = ui.max_rect();
         ui.painter().rect_filled(rect, 0.0, DEFAULT_BG);
@@ -449,6 +495,9 @@ pub fn run(arcade: Arcade, cfg: &Config) -> Result<()> {
     let done_term = Arc::new(Mutex::new(None));
     let done_for_app = done_term.clone();
     let mode = arcade.mode;
+    let always_on_top = cfg.always_on_top;
+    let mut arcade = arcade;
+    arcade.window_hints = true;
     let result = eframe::run_native(
         "sidequest",
         options,
@@ -462,8 +511,11 @@ pub fn run(arcade: Arcade, cfg: &Config) -> Result<()> {
                 last: Instant::now(),
                 last_poll: Instant::now(),
                 first_frame: true,
+                on_top: always_on_top,
+                engaged: true,
                 done_term: done_for_app,
                 script: std::env::var("SIDEQUEST_SCRIPT").map(|s| parse_script(&s)).unwrap_or_default(),
+                minimize_at: std::env::var("SIDEQUEST_SCRIPT").ok().and_then(|s| script_minimize_at(&s)),
                 snapshot: std::env::var_os("SIDEQUEST_SNAPSHOT").map(|p| {
                     let at = std::env::var("SIDEQUEST_SNAPSHOT_AT").ok().and_then(|t| t.parse().ok()).unwrap_or(2.0);
                     (std::path::PathBuf::from(p), at, false)
@@ -475,9 +527,11 @@ pub fn run(arcade: Arcade, cfg: &Config) -> Result<()> {
     clear_pidfile();
     // Hand focus back to the terminal Claude is running in.
     if mode == Mode::Auto && cfg.focus_terminal {
+        // `done_term` is only set when Claude finished while you were playing. If you'd minimized the
+        // window or switched apps, it closes quietly and leaves your focus where it is.
         let term = done_term.lock().ok().and_then(|d| d.clone());
-        let term = term.filter(|t| t != "-").or_else(|| Watcher::new(claude::events_path(), 0).last_term);
         if let Some(t) = term {
+            let t = if t == "-" { Watcher::new(claude::events_path(), 0).last_term.unwrap_or_default() } else { t };
             claude::focus_terminal(&t);
         }
     }
@@ -504,7 +558,9 @@ mod tests {
 
     #[test]
     fn script_and_bmp() {
-        let s = parse_script("0.5:enter, 1:space,bad,2:w,x:y");
+        assert_eq!(script_minimize_at("1:enter,2.5:minimize"), Some(2.5));
+        assert_eq!(script_minimize_at("1:enter"), None);
+        let s = parse_script("0.5:enter, 1:space,bad,2:w,x:y,3:minimize");
         assert_eq!(
             s.into_iter().collect::<Vec<_>>(),
             vec![(0.5, Key::Enter), (1.0, Key::Space), (2.0, Key::Char('w'))]

@@ -58,6 +58,8 @@ pub struct Arcade {
     banner: Option<f64>,
     new_best: Option<f64>,
     pub quit: bool,
+    /// Show window-only hints (minimize shortcut) in the pause menu.
+    pub window_hints: bool,
     time: f64,
     autosave: f64,
     score_check: f64,
@@ -84,6 +86,7 @@ impl Arcade {
             banner: None,
             new_best: None,
             quit: false,
+            window_hints: false,
             time: 0.0,
             autosave: 0.0,
             score_check: 0.0,
@@ -139,6 +142,17 @@ impl Arcade {
     fn leave_game(&mut self) {
         self.save_current();
         self.screen = Screen::Menu;
+    }
+
+    /// Pauses the running game (no-op on the menu or if already paused). Used when the window is
+    /// minimized or loses focus.
+    pub fn pause(&mut self) {
+        if let Screen::Play(s) = &mut self.screen
+            && s.pause.is_none()
+        {
+            s.pause = Some(Pause { reason: Reason::User, sel: 0 });
+            self.save_current();
+        }
     }
 
     /// Claude finished (or needs permission): pause and show the banner.
@@ -413,6 +427,10 @@ impl Arcade {
                         if i == p.sel { Style::new().fg(Color::Black).bg(color) } else { Style::new().fg(ui::DIM) };
                     lines.push(Line::styled(format!("  {item}  "), st));
                 }
+                if self.window_hints {
+                    lines.push(Line::from(""));
+                    lines.push(Line::styled("⌘M minimize · click away and it pauses", Style::new().fg(ui::FAINT)));
+                }
             }
             ui::modal(f, body, title, color, lines);
         } else if s.countdown > 0.0 {
@@ -522,6 +540,22 @@ mod tests {
         let a = Arcade::new(Store::open(d.path().to_path_buf()), Mode::Auto, None);
         assert_eq!(a.current_game(), Some("invaders"));
         assert!(a.paused(), "countdown before play resumes");
+    }
+
+    #[test]
+    fn pause_only_affects_running_games() {
+        let (mut a, _d) = arcade(Mode::Manual, None);
+        a.pause();
+        assert_eq!(a.current_game(), None, "pausing on the menu does nothing");
+        let (mut a, _d) = arcade(Mode::Manual, Some("2048"));
+        assert!(!a.paused());
+        a.pause();
+        assert!(a.paused());
+        a.window_hints = true;
+        assert!(render(&mut a, 100, 34).contains("minimize"));
+        a.pause(); // idempotent
+        a.update(0.02, &keys(&[Key::Esc]));
+        assert!(!a.paused(), "esc resumes as usual");
     }
 
     #[test]

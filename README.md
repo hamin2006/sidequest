@@ -56,6 +56,10 @@ sidequest config --init   # write ~/.config/sidequest/config.toml
 
 In every game, `esc` pauses (resume, restart or go back to the games list).
 
+The window floats above everything when it pops up. Press `⌘M` (or the yellow button) to minimize it,
+or just click another app: it pauses, drops behind your other windows, and if Claude finishes while
+you're elsewhere it closes quietly instead of pulling you back to the terminal.
+
 ## Configuration
 
 `~/.config/sidequest/config.toml`, all optional:
