@@ -1119,14 +1119,14 @@ impl Dive {
         let t = self.time;
         let fade = progress.echo_fade();
         let lamp_r = if self.sub.lamp { LAMP_R + 0.5 * progress.level(Upgrade::Sonar).min(1) as f64 } else { 0.0 };
-        let ambient = ZONES[world::zone_index(self.sub.y)].ambient as f64;
-        let light = lamp_r.max(ambient);
         let lure_color =
             if progress.has(Tech::LureFilter) { Color::Rgb(255, 80, 80) } else { Color::Rgb(255, 190, 80) };
         let sx = self.sub.x;
         let sy = self.sub.y;
         let lit = |x: i32, y: i32| -> bool {
             let d = dist(x, y, sx, sy);
+            // Light depends on the depth of the cell being lit, not of the sub.
+            let light = lamp_r.max(ZONES[world::zone_index(y)].ambient as f64);
             (y < ZONES[1].top) || (d <= light && line_clear(&world, sx, sy, x, y))
         };
         // Ping rings: water cells in the moving band.
